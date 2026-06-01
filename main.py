@@ -14,7 +14,7 @@ load_dotenv()
 THREE_XUI_SUB_URL = os.getenv("THREE_XUI_SUB_URL", "http://127.0.0.1:2096")
 DEFAULT_DEVICE_LIMIT = int(os.getenv("DEFAULT_DEVICE_LIMIT", "3"))
 DEVICE_TTL_DAYS = int(os.getenv("DEVICE_TTL_DAYS", "30"))
-ERROR_PROXY_TEXT = os.getenv("ERROR_PROXY_TEXT", "⚠️_DEVICE_LIMIT_REACHED")
+ERROR_PROXY_TEXT = os.getenv("ERROR_PROXY_TEXT", "⚠️ DEVICE LIMIT REACHED")
 API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN", "secret")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "2097"))
@@ -71,7 +71,7 @@ def get_client_limit(sub_id: str) -> int:
         return res[0] if res else DEFAULT_DEVICE_LIMIT
 
 def generate_error_subscription() -> str:
-    fake_vless = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:0?encryption=none#{ERROR_PROXY_TEXT}"
+    fake_vless = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?type=tcp&encryption=none&security=none#{ERROR_PROXY_TEXT}"
     return base64.b64encode(fake_vless.encode("utf-8")).decode("utf-8")
 
 
@@ -186,4 +186,10 @@ async def set_custom_limit(sub_id: str, new_limit: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=HOST, port=PORT)
+    uvicorn.run(
+        app,
+        host=HOST,
+        port=PORT,
+        ssl_keyfile="/root/cert/ip/privkey.pem",
+        ssl_certfile="/root/cert/ip/fullchain.pem"
+    )
