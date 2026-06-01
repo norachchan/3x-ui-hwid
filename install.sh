@@ -37,6 +37,18 @@ PORT=${PORT:-2096}
 read -p "Enter 3x-UI subscription URL [Default: http://127.0.0.1:2097]: " THREE_XUI_SUB_URL
 THREE_XUI_SUB_URL=${THREE_XUI_SUB_URL:-"http://127.0.0.1:2097"}
 
+read -p "Enable HTTPS? (y/n) [Default: n]: " SSL_ENABLE
+SSL_ENABLE=${SSL_ENABLE:-n}
+if [[ "$SSL_ENABLE" =~ ^[Yy]$ ]]; then
+    read -p "Path to SSL certificate file (fullchain.pem) [Default: /root/cert/ip/fullchain.pem]: " SSL_CERTFILE
+    SSL_CERTFILE=${SSL_CERTFILE:-"/root/cert/ip/fullchain.pem"}
+    read -p "Path to SSL private key file (privkey.pem) [Default: /root/cert/ip/privkey.pem]: " SSL_KEYFILE
+    SSL_KEYFILE=${SSL_KEYFILE:-"/root/cert/ip/privkey.pem"}
+else
+    SSL_CERTFILE=""
+    SSL_KEYFILE=""
+fi
+
 read -p "Enter default device limit per key [Default: 3]: " DEFAULT_DEVICE_LIMIT
 DEFAULT_DEVICE_LIMIT=${DEFAULT_DEVICE_LIMIT:-3}
 
@@ -78,7 +90,7 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT
+ExecStart=$INSTALL_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT $([ -n "$SSL_CERTFILE" ] && echo "--ssl-certfile $SSL_CERTFILE --ssl-keyfile $SSL_KEYFILE")
 Restart=always
 RestartSec=3
 

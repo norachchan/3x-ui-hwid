@@ -79,7 +79,8 @@ def generate_error_subscription() -> str:
 async def handle_subscription(
     sub_id: str, 
     request: Request, 
-    x_hwid: str = Header(None, alias="X-Hwid"),
+    x_hwid: str = Header(None, alias="x-hwid"),
+    device_model: str = Header(None, alias="x-device-model"),
     user_agent: str = Header(None, alias="User-Agent")
 ):
     if not x_hwid:
@@ -110,7 +111,7 @@ async def handle_subscription(
             if current_count >= limit:
                 return generate_error_subscription()
             
-            device_name = user_agent.split('(')[0].strip()[:50] if user_agent else f"Device_{x_hwid[:6]}"
+            device_name = device_model if device_model else (user_agent.split('(')[0].strip()[:50] if user_agent else f"Device_{x_hwid[:6]}")
             
             cursor.execute(
                 "INSERT INTO devices (sub_id, hwid, device_name) VALUES (?, ?, ?)",
