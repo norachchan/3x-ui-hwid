@@ -11,13 +11,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-THREE_XUI_SUB_URL = os.getenv("THREE_XUI_SUB_URL", "http://127.0.0.1:2096")
+THREE_XUI_SUB_URL = os.getenv("THREE_XUI_SUB_URL", "http://127.0.0.1:2097")
 DEFAULT_DEVICE_LIMIT = int(os.getenv("DEFAULT_DEVICE_LIMIT", "3"))
 DEVICE_TTL_DAYS = int(os.getenv("DEVICE_TTL_DAYS", "30"))
 ERROR_PROXY_TEXT = os.getenv("ERROR_PROXY_TEXT", "⚠️ DEVICE LIMIT REACHED")
 API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN", "secret")
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "2097"))
+PORT = int(os.getenv("PORT", "2096"))
 
 DB_NAME = "hwid_management.db"
 security = HTTPBearer()
@@ -187,10 +187,4 @@ async def set_custom_limit(sub_id: str, new_limit: int):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        app,
-        host=HOST,
-        port=PORT,
-        ssl_keyfile="/root/cert/ip/privkey.pem",
-        ssl_certfile="/root/cert/ip/fullchain.pem"
-    )
+    uvicorn.run(app, host=HOST, port=PORT)

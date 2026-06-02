@@ -84,7 +84,7 @@ deactivate
 echo -e "\n${YELLOW}[4/5] Registering module as a Linux system service...${NC}"
 cat <<EOF > /etc/systemd/system/3xui-hwid.service
 [Unit]
-Description=3x-UI HWID Gate
+Description=3x-UI HWID
 After=network.target
 
 [Service]

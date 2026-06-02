@@ -82,11 +82,11 @@ All API endpoints are protected. You must pass your secret token in the headers 
 
 | Method | Endpoint | Payload | Description |
 | :--- | :--- | :--- | :--- |
-| `GET` | `/api/client/{client_uuid}/devices` | - | Returns a list of all registered devices for a given UUID. |
+| `GET` | `/api/client/{sub_id}/devices` | - | Returns a list of all registered devices for a given UUID. |
 | `POST` | `/api/device/{device_id}/rename` | `{"device_name": "..."}` | Updates the display name of a specific device. |
 | `DELETE` | `/api/device/{device_id}` | - | Deletes a specific device, freeing up a slot instantly. |
-| `DELETE` | `/api/client/{client_uuid}/reset` | - | Unlinks all devices for a user. Perfect for a "Reset Devices" button in your Bot/CRM. |
-| `POST` | `/api/client/{client_uuid}/limit/{new_limit}`| - | Overrides the global default limit for a specific user (e.g., granting a VIP user 5 slots). |
+| `DELETE` | `/api/client/{sub_id}/reset` | - | Unlinks all devices for a user. Perfect for a "Reset Devices" button in your Bot/CRM. |
+| `POST` | `/api/client/{sub_id}/limit/{new_limit}`| - | Overrides the global default limit for a specific user (e.g., granting a VIP user 5 slots). |
 
 ---
 
