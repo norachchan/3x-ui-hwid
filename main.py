@@ -55,6 +55,12 @@ class DeviceInfo(BaseModel):
     last_seen: str
     created_at: str
 
+class SubDevicesResponse(BaseModel):
+    sub_id: str
+    device_limit: int
+    current_count: int
+    devices: List[DeviceInfo]
+
 class RenameDeviceRequest(BaseModel):
     device_name: str
 
@@ -63,7 +69,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Security(security))
         raise HTTPException(status_code=403, detail="Invalid API Token")
     return credentials.credentials
 
-def get_client_limit(sub_id: str) -> int:
+def get_sub_limit(sub_id: str) -> int:
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT device_limit FROM custom_limits WHERE sub_id = ?", (sub_id,))
@@ -86,7 +92,8 @@ async def handle_subscription(
     if not x_hwid:
         raise HTTPException(status_code=400, detail="Incompatible VPN client. HWID header missing.")
 
-    limit = get_client_limit(sub_id)
+    limit = get_sub_limit(sub_id)
+    is_blocked = False
 
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
@@ -109,42 +116,59 @@ async def handle_subscription(
                 current_count = cursor.fetchone()[0]
             
             if current_count >= limit:
-                return generate_error_subscription()
-            
-            device_name = device_model if device_model else (user_agent.split('(')[0].strip()[:50] if user_agent else f"Device_{x_hwid[:6]}")
-            
-            cursor.execute(
-                "INSERT INTO devices (sub_id, hwid, device_name) VALUES (?, ?, ?)",
-                (sub_id, x_hwid, device_name)
-            )
-            conn.commit()
+                is_blocked = True
+            else:
+                device_name = device_model if device_model else (user_agent.split('(')[0].strip()[:50] if user_agent else f"Device_{x_hwid[:6]}")
+                cursor.execute(
+                    "INSERT INTO devices (sub_id, hwid, device_name) VALUES (?, ?, ?)",
+                    (sub_id, x_hwid, device_name)
+                )
+                conn.commit()
 
     xui_url = f"{THREE_XUI_SUB_URL}/sub/{sub_id}"
     try:
         response = requests.get(xui_url, params=request.query_params, timeout=5)
         
         if response.status_code == 200:
-            return response.text
+            content_to_send = generate_error_subscription() if is_blocked else response.text
+            client_response = PlainTextResponse(content=content_to_send)
+            
+            excluded_headers = ["content-length", "content-type", "server", "date"]
+            for header_name, header_value in response.headers.items():
+                if header_name.lower() not in excluded_headers:
+                    client_response.headers[header_name] = header_value
+                    
+            return client_response
+            
         elif response.status_code == 404:
             with sqlite3.connect(DB_NAME) as conn:
                 conn.cursor().execute("DELETE FROM devices WHERE sub_id = ?", (sub_id,))
                 conn.commit()
             raise HTTPException(status_code=404, detail="Subscription not found in 3x-UI")
         else:
-            return generate_error_subscription()
+            return PlainTextResponse(content=generate_error_subscription())
             
     except requests.exceptions.RequestException:
         raise HTTPException(status_code=500, detail="Internal 3x-UI connection error")
 
 
-@app.get("/api/sub/{sub_id}/devices", response_model=List[DeviceInfo], dependencies=[Depends(verify_token)])
-async def get_client_devices(sub_id: str):
+@app.get("/api/sub/{sub_id}/devices", response_model=SubDevicesResponse, dependencies=[Depends(verify_token)])
+async def get_sub_devices(sub_id: str):
+    limit = get_sub_limit(sub_id)
+    
     with sqlite3.connect(DB_NAME) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT id, hwid, device_name, last_seen, created_at FROM devices WHERE sub_id = ?", (sub_id,))
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        devices_list = [dict(row) for row in rows]
+        
+    return {
+        "sub_id": sub_id,
+        "device_limit": limit,
+        "current_count": len(devices_list),
+        "devices": devices_list
+    }
 
 @app.post("/api/device/{device_id}/rename", dependencies=[Depends(verify_token)])
 async def rename_device(device_id: int, data: RenameDeviceRequest):
@@ -167,7 +191,7 @@ async def delete_device(device_id: int):
     return {"status": "success", "message": "Device unlinked"}
 
 @app.delete("/api/sub/{sub_id}/reset", dependencies=[Depends(verify_token)])
-async def reset_client_devices(sub_id: str):
+async def reset_sub_devices(sub_id: str):
     with sqlite3.connect(DB_NAME) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM devices WHERE sub_id = ?", (sub_id,))
