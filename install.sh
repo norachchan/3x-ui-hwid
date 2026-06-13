@@ -93,6 +93,7 @@ WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/venv/bin/uvicorn main:app --host 0.0.0.0 --port $PORT $([ -n "$SSL_CERTFILE" ] && echo "--ssl-certfile $SSL_CERTFILE --ssl-keyfile $SSL_KEYFILE")
 Restart=always
 RestartSec=3
+RuntimeMaxSec=86400
 
 [Install]
 WantedBy=multi-user.target
