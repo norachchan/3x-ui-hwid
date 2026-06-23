@@ -140,11 +140,15 @@ prompt DEVICE_TTL_DAYS "Отвязка неактивных устройств (
 prompt ERROR_PROXY_TEXT "Текст при превышении лимита" "⚠️ ЛИМИТ УСТРОЙСТВ ДОСТИГНУТ"
 prompt TRUSTED_IPS "Доверенные IP без x-hwid (через запятую, для агрегаторов)" ""
 
+generate_api_token() {
+  python3 -c "import secrets; print(secrets.token_urlsafe(24))"
+}
+
 if [[ -f .env ]] && grep -q '^API_BEARER_TOKEN=' .env; then
   API_BEARER_TOKEN="$(grep '^API_BEARER_TOKEN=' .env | cut -d= -f2-)"
   log "Сохранён существующий API_BEARER_TOKEN"
 else
-  API_BEARER_TOKEN="$(tr -dc 'a-zA-Z0-9' </dev/urandom | head -c 32)"
+  API_BEARER_TOKEN="$(generate_api_token)"
 fi
 
 if ! $AUTO_YES; then
