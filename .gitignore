@@ -1,0 +1,11 @@
+.env
+.api_token
+venv/
+__pycache__/
+*.py[cod]
+*.db
+*.sqlite3
+.Python
+*.log
+.idea/
+.vscode/

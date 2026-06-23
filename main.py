@@ -18,6 +18,9 @@ ERROR_PROXY_TEXT = os.getenv("ERROR_PROXY_TEXT", "⚠️ DEVICE LIMIT REACHED")
 API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN", "secret")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "2096"))
+TRUSTED_IPS = {ip.strip() for ip in os.getenv("TRUSTED_IPS", "").split(",") if ip.strip()}
+PUBLIC_HOST = os.getenv("PUBLIC_HOST", "").strip()
+SUB_PATH = os.getenv("SUB_PATH", "/subs/").strip("/") or "subs"
 
 DB_NAME = "hwid_management.db"
 security = HTTPBearer()
@@ -80,16 +83,60 @@ def generate_error_subscription() -> str:
     fake_vless = f"vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?type=tcp&encryption=none&security=none#{ERROR_PROXY_TEXT}"
     return base64.b64encode(fake_vless.encode("utf-8")).decode("utf-8")
 
+def get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return ""
 
-@app.get("/sub/{sub_id}", response_class=PlainTextResponse)
+def proxy_to_xui(request: Request, sub_id: str, is_blocked: bool = False) -> PlainTextResponse:
+    xui_url = f"{THREE_XUI_SUB_URL}/{SUB_PATH}/{sub_id}"
+    proxy_headers = {}
+    client_host = request.headers.get("host", "")
+    if client_host:
+        proxy_headers["Host"] = client_host.split(":")[0]
+    elif PUBLIC_HOST:
+        proxy_headers["Host"] = PUBLIC_HOST
+
+    try:
+        response = requests.get(xui_url, params=request.query_params, headers=proxy_headers, timeout=5)
+
+        if response.status_code == 200:
+            content_to_send = generate_error_subscription() if is_blocked else response.text
+            client_response = PlainTextResponse(content=content_to_send)
+
+            excluded_headers = ["content-length", "content-type", "server", "date"]
+            for header_name, header_value in response.headers.items():
+                if header_name.lower() not in excluded_headers:
+                    client_response.headers[header_name] = header_value
+
+            return client_response
+
+        if response.status_code == 404:
+            with sqlite3.connect(DB_NAME) as conn:
+                conn.cursor().execute("DELETE FROM devices WHERE sub_id = ?", (sub_id,))
+                conn.commit()
+            raise HTTPException(status_code=404, detail="Subscription not found in 3x-UI")
+
+        return PlainTextResponse(content=generate_error_subscription())
+
+    except requests.exceptions.RequestException:
+        raise HTTPException(status_code=500, detail="Internal 3x-UI connection error")
+
+
 async def handle_subscription(
-    sub_id: str, 
-    request: Request, 
+    sub_id: str,
+    request: Request,
     x_hwid: str = Header(None, alias="x-hwid"),
     device_model: str = Header(None, alias="x-device-model"),
-    user_agent: str = Header(None, alias="User-Agent")
+    user_agent: str = Header(None, alias="User-Agent"),
 ):
+    client_ip = get_client_ip(request)
     if not x_hwid:
+        if client_ip in TRUSTED_IPS:
+            return proxy_to_xui(request, sub_id)
         raise HTTPException(status_code=400, detail="Incompatible VPN client. HWID header missing.")
 
     limit = get_sub_limit(sub_id)
@@ -125,31 +172,17 @@ async def handle_subscription(
                 )
                 conn.commit()
 
-    xui_url = f"{THREE_XUI_SUB_URL}/sub/{sub_id}"
-    try:
-        response = requests.get(xui_url, params=request.query_params, timeout=5)
-        
-        if response.status_code == 200:
-            content_to_send = generate_error_subscription() if is_blocked else response.text
-            client_response = PlainTextResponse(content=content_to_send)
-            
-            excluded_headers = ["content-length", "content-type", "server", "date"]
-            for header_name, header_value in response.headers.items():
-                if header_name.lower() not in excluded_headers:
-                    client_response.headers[header_name] = header_value
-                    
-            return client_response
-            
-        elif response.status_code == 404:
-            with sqlite3.connect(DB_NAME) as conn:
-                conn.cursor().execute("DELETE FROM devices WHERE sub_id = ?", (sub_id,))
-                conn.commit()
-            raise HTTPException(status_code=404, detail="Subscription not found in 3x-UI")
-        else:
-            return PlainTextResponse(content=generate_error_subscription())
-            
-    except requests.exceptions.RequestException:
-        raise HTTPException(status_code=500, detail="Internal 3x-UI connection error")
+    return proxy_to_xui(request, sub_id, is_blocked=is_blocked)
+
+
+@app.get("/subs/{sub_id}", response_class=PlainTextResponse)
+async def handle_subscription_subs(sub_id: str, request: Request, x_hwid: str = Header(None, alias="x-hwid"), device_model: str = Header(None, alias="x-device-model"), user_agent: str = Header(None, alias="User-Agent")):
+    return await handle_subscription(sub_id, request, x_hwid, device_model, user_agent)
+
+
+@app.get("/sub/{sub_id}", response_class=PlainTextResponse)
+async def handle_subscription_sub(sub_id: str, request: Request, x_hwid: str = Header(None, alias="x-hwid"), device_model: str = Header(None, alias="x-device-model"), user_agent: str = Header(None, alias="User-Agent")):
+    return await handle_subscription(sub_id, request, x_hwid, device_model, user_agent)
 
 
 @app.get("/api/sub/{sub_id}/devices", response_model=SubDevicesResponse, dependencies=[Depends(verify_token)])
