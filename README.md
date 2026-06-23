@@ -14,6 +14,12 @@
 bash <(curl -Ls https://raw.githubusercontent.com/norachchan/3x-ui-hwid/main/install.sh)
 ```
 
+Если установка обрывается после вопросов — запустите из клонированного репозитория:
+
+```bash
+cd /root/3x-ui-hwid && git pull && bash install.sh
+```
+
 Без вопросов (все значения по умолчанию):
 
 ```bash

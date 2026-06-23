@@ -119,6 +119,15 @@ else
 fi
 cd "$INSTALL_DIR"
 
+# curl | bash запускает закэшированную копию; после git pull — актуальный install.sh с диска
+LOCAL_SCRIPT="$INSTALL_DIR/install.sh"
+RUNNING_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+RESOLVED_LOCAL="$(readlink -f "$LOCAL_SCRIPT" 2>/dev/null || realpath "$LOCAL_SCRIPT" 2>/dev/null || echo "$LOCAL_SCRIPT")"
+if [[ -f "$LOCAL_SCRIPT" && "$RUNNING_SCRIPT" != "$RESOLVED_LOCAL" ]]; then
+  log "Перезапуск актуального install.sh с диска..."
+  exec bash "$LOCAL_SCRIPT" "$@"
+fi
+
 PUBLIC_IP="$(detect_public_ip)"
 SUB_PATH="$(read_xui_setting subPath '/subs/')"
 SUB_PATH="${SUB_PATH#/}"
